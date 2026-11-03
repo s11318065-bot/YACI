@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>雅瓷 - 歷代陶瓷藝術展</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Google Fonts: Noto Serif TC (思源宋體) 增加高級感 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;500;600&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Noto Serif TC', serif;
+            /* 增加高雅的細膩紙張/塗料雜訊紋理背景 */
+            background-color: #f4efe6;
+            background-image: 
+                radial-gradient(circle at center, rgba(255,255,255,0.4) 0%, rgba(230,225,215,0.3) 100%),
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.06'/%3E%3C/svg%3E");
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+        /* 隱藏捲軸 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        
+        /* 讓 Three.js Canvas 沒有點擊閃爍 */
+        canvas {
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* 淺色高級毛玻璃 */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.6); 
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.04);
+        }
+
+        /* 沉穩的雅致青銅金 */
+        .text-gold { color: #b08d57; }
+        .bg-gold { background-color: #b08d57; }
+        .border-gold { border-color: #b08d57; }
+    </style>
+
+    <!-- 引入 Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body class="text-gray-800 selection:bg-amber-100 selection:text-amber-900">
+
+    <!-- 3D 畫布容器 -->
+    <div id="canvas-container"></div>
+
+    <!-- UI 覆蓋層 -->
+    <div class="relative z-10 w-full h-screen pointer-events-none flex flex-col justify-between p-6 md:p-12">
+        
+        <!-- 頂部區塊 -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <!-- 品牌 Logo / 標題 -->
+            <div class="pointer-events-auto">
+                <h1 class="text-3xl md:text-4xl font-semibold tracking-widest text-gray-900">雅瓷 YACI</h1>
+                <p class="text-sm tracking-widest text-gold mt-1 font-medium">IMPERIAL CERAMICS</p>
+            </div>
+
+            <!-- 分類導覽列與環境切換按鈕 -->
+            <div class="flex flex-col md:flex-row gap-4 items-start md:items-center w-full md:w-auto">
+                <nav class="pointer-events-auto glass-panel rounded-full px-2 py-2 flex gap-2 overflow-x-auto w-full md:w-auto">
+                    <button onclick="switchCategory('tang')" id="btn-tang" class="category-btn px-6 py-2 rounded-full text-sm tracking-widest transition-all duration-300 bg-gold text-white font-medium shadow-md">唐代</button>
+                    <button onclick="switchCategory('song')" id="btn-song" class="category-btn px-6 py-2 rounded-full text-sm tracking-widest transition-all duration-300 hover:bg-black/5 text-gray-500 hover:text-gray-800">宋代</button>
+                    <button onclick="switchCategory('yuan')" id="btn-yuan" class="category-btn px-6 py-2 rounded-full text-sm tracking-widest transition-all duration-300 hover:bg-black/5 text-gray-500 hover:text-gray-800">元代</button>
+                    <button onclick="switchCategory('ming')" id="btn-ming" class="category-btn px-6 py-2 rounded-full text-sm tracking-widest transition-all duration-300 hover:bg-black/5 text-gray-500 hover:text-gray-800">明代</button>
+                    <button onclick="switchCategory('qing')" id="btn-qing" class="category-btn px-6 py-2 rounded-full text-sm tracking-widest transition-all duration-300 hover:bg-black/5 text-gray-500 hover:text-gray-800">清代</button>
+                </nav>
+                
+                <!-- 室內室外切換按鈕 -->
+                <button onclick="toggleEnvironment()" id="btn-env-toggle" class="pointer-events-auto glass-panel px-5 py-3 md:py-2 rounded-full text-sm tracking-widest transition-all duration-300 hover:bg-white/60 text-gold font-bold border border-gold/40 flex items-center gap-2 shadow-sm whitespace-nowrap">
+                    <span>✧</span> 場景：室內
+                </button>
+            </div>
+        </div>
+
+        <!-- 底部區塊 -->
+        <div class="flex flex-col md:flex-row justify-between items-end gap-8 pb-4">
+            
+            <!-- 資訊面板 -->
+            <div class="pointer-events-auto glass-panel p-8 rounded-2xl w-full md:w-[420px] transform transition-all duration-500 hover:-translate-y-1">
+                <div class="flex items-center gap-3 mb-4">
+                    <span class="h-[1px] w-8 bg-gold"></span>
+                    <span id="ui-category-text" class="text-xs tracking-widest text-gold font-medium uppercase">TANG DYNASTY</span>
+                </div>
+                <h2 id="ui-name" class="text-2xl font-semibold mb-2 leading-snug text-gray-900">載入中...</h2>
+                <p id="ui-desc" class="text-sm text-gray-600 mb-6 leading-relaxed">...</p>
+                
+                <div class="space-y-4 border-t border-gray-200 pt-6">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-500 tracking-wider">出產窯口 / 地點</span>
+                        <span id="ui-origin" class="font-medium text-lg text-gray-800">---</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-500 tracking-wider">目前館藏狀態</span>
+                        <span id="ui-schedule" class="text-sm px-3 py-1 rounded-full border">---</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 移除款式切換按鈕，改為單純的操作提示 -->
+            <div class="pointer-events-auto flex flex-col items-center gap-4 hidden md:flex md:w-[200px] justify-end pb-4">
+                <div class="glass-panel px-6 py-3 rounded-full border border-gold/30 shadow-[0_0_15px_rgba(176,141,87,0.2)] animate-pulse">
+                    <p class="text-sm tracking-widest text-gold font-medium">⟲ 拖曳旋轉 360° 觀賞</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- 1. 陶瓷資料庫 (每個朝代精選一件絕世國寶) ---
+        window.ceramicData = {
+            tang: [
+                { id: 0, name: '唐三彩雙龍耳瓶', desc: '盛唐時期經典之作，器形飽滿。釉色以黃、綠、白交織，自然流淌，表面帶有細微的冰裂開片與立體的流釉觸感，展現大唐氣象。', origin: '河南 鞏義窯', schedule: '大英博物館 常設展', status: 'available', color: 0xffddaa, shape: 'zun', texture: 'tang_sancai' }
+            ],
+            song: [
+                { id: 0, name: '宋 汝窯天青釉弦紋樽', desc: '「雨過天青雲破處」，汝瓷居宋代五大名窯之首。此樽造型古樸，釉面滿佈細密且深邃的冰裂紋，觸感溫潤如玉。', origin: '河南 寶豐清涼寺 (汝官窯)', schedule: '台北國立故宮博物院', status: 'full', color: 0x88aabb, shape: 'jar', texture: 'song_ru' }
+            ],
+            yuan: [
+                { id: 0, name: '元 青花雲龍紋梅瓶', desc: '元代青花瓷巔峰之作，使用進口「蘇麻離青」鈷料。發色濃豔並帶有凹陷的「鐵鏽斑」，在光線下呈現獨特的立體微刻感。', origin: '江西 景德鎮 (湖田窯)', schedule: '南京博物院', status: 'full', color: 0xffffff, shape: 'meiping', texture: 'yuan_qinghua' }
+            ],
+            ming: [
+                { id: 0, name: '明 成化鬥彩雞缸杯', desc: '明代宮廷御用，釉下青花勾勒輪廓，釉上填以紅、綠、黃彩。釉上彩的部分帶有明顯的厚度與微凸觸感，極致精緻。', origin: '江西 景德鎮 (御窯廠)', schedule: '上海龍美術館', status: 'full', color: 0xfffcf0, shape: 'bowl', texture: 'ming_doucai' }
+            ],
+            qing: [
+                { id: 0, name: '清 乾隆粉彩百花不露地葫蘆瓶', desc: '被稱為「萬花錦」，器表畫滿各式繁花，不露一絲底色。粉彩厚實，花瓣邊緣立體凸起，極盡奢華，展現極致彩繪技藝。', origin: '江西 景德鎮 (御窯廠)', schedule: '北京故宮博物院', status: 'warning', color: 0xffffff, shape: 'gourd', texture: 'qing_famille_rose' }
+            ]
+        };
+
+        window.currentCategory = 'tang';
+        window.currentIndex = 0;
+
+        // --- 2. Three.js 高級明亮場景設置 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf4efe6); // 柔和米白色背景
+        scene.fog = new THREE.FogExp2(0xf4efe6, 0.025);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 1.2, 4.8); 
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
+        container.appendChild(renderer.domElement);
+
+        // --- 3. 博物館等級柔和打光 (Museum Lighting) ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // 充足的環境光
+        scene.add(ambientLight);
+
+        const keyLight = new THREE.DirectionalLight(0xfff8f0, 1.2); // 主光稍微柔和
+        keyLight.position.set(3, 5, 3);
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.width = 2048;
+        keyLight.shadow.mapSize.height = 2048;
+        keyLight.shadow.bias = -0.0005;
+        scene.add(keyLight);
+
+        const fillLight = new THREE.DirectionalLight(0xe0e8f0, 0.8); // 輕微冷色補光
+        fillLight.position.set(-3, 2, 2);
+        scene.add(fillLight);
+
+        const rimLight = new THREE.SpotLight(0xffffff, 2.0); // 白皙背光輪廓
+        rimLight.position.set(0, 4, -4);
+        rimLight.angle = Math.PI / 3;
+        scene.add(rimLight);
+
+        const sparkleLight = new THREE.PointLight(0xffffff, 1.0, 5); // 動態光源
+        scene.add(sparkleLight);
+
+        // --- 新增：室外環境光源 (強烈太陽光，初始關閉) ---
+        const sunLight = new THREE.DirectionalLight(0xfffaee, 0); 
+        sunLight.position.set(-10, 15, 10);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.left = -10;
+        sunLight.shadow.camera.right = 10;
+        sunLight.shadow.camera.top = 10;
+        sunLight.shadow.camera.bottom = -10;
+        sunLight.shadow.bias = -0.0005;
+        scene.add(sunLight);
+
+        // --- 4. 環境物件 (高質感淺色展示台與塗料材質牆面) ---
+        
+        // 4.1 程式化生成美術館牆面塗料/帆布凹凸紋理 (Plaster/Canvas Bump Map)
+        const wallTexCanvas = document.createElement('canvas');
+        wallTexCanvas.width = 512; wallTexCanvas.height = 512;
+        const wallCtx = wallTexCanvas.getContext('2d');
+        wallCtx.fillStyle = '#888';
+        wallCtx.fillRect(0, 0, 512, 512);
+        
+        // 加入大片不均勻的抹痕 (模擬手工塗料工藝)
+        for(let i=0; i<1500; i++) {
+            wallCtx.fillStyle = Math.random() > 0.5 ? '#999' : '#777';
+            wallCtx.globalAlpha = Math.random() * 0.15;
+            wallCtx.beginPath();
+            wallCtx.arc(Math.random()*512, Math.random()*512, Math.random()*30+5, 0, Math.PI*2);
+            wallCtx.fill();
+        }
+        
+        // 加入細微雜訊顆粒 (模擬材質粗糙度)
+        const wallImgD = wallCtx.getImageData(0,0,512,512);
+        for(let i=0; i<wallImgD.data.length; i+=4) {
+            let noise = (Math.random() - 0.5) * 40;
+            wallImgD.data[i] += noise; 
+            wallImgD.data[i+1] += noise; 
+            wallImgD.data[i+2] += noise;
+        }
+        wallCtx.putImageData(wallImgD, 0, 0);
+        
+        const plasterTexture = new THREE.CanvasTexture(wallTexCanvas);
+        plasterTexture.wrapS = plasterTexture.wrapT = THREE.RepeatWrapping;
+        plasterTexture.repeat.set(8, 4);
+
+        // 4.3 帶有微幅紋理的淺色展示地板
+        const floorGeo = new THREE.PlaneGeometry(50, 50);
+        const floorMat = new THREE.MeshStandardMaterial({ 
+            color: 0xdfd9cf, 
+            roughness: 0.7, 
+            metalness: 0.05,
+            bumpMap: plasterTexture,
+            bumpScale: 0.005 
+        }); 
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.05;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const stageGeo = new THREE.CylinderGeometry(1.2, 1.3, 0.05, 64);
+        const stageMat = new THREE.MeshStandardMaterial({ color: 0xfdfdfc, roughness: 0.1, metalness: 0.05 }); // 純白展台
+        const stage = new THREE.Mesh(stageGeo, stageMat);
+        stage.position.y = -0.025;
+        stage.receiveShadow = true;
+        stage.castShadow = true;
+        scene.add(stage);
+
+        // --- 4.4 程式化生成室外天空穹頂 (SkyDome) ---
+        const skyCanvas = document.createElement('canvas');
+        skyCanvas.width = 2;
+        skyCanvas.height = 512;
+        const skyCtx = skyCanvas.getContext('2d');
+        const skyGradient = skyCtx.createLinearGradient(0, 0, 0, 512);
+        skyGradient.addColorStop(0, '#2b6a9e');    // 深邃蔚藍
+        skyGradient.addColorStop(0.4, '#6da4c7');  // 柔和天藍
+        skyGradient.addColorStop(0.5, '#b0d4d6');  // 地平線白霧藍
+        skyGradient.addColorStop(0.55, '#7fa375'); // 遠景青翠綠意
+        skyGradient.addColorStop(1, '#4f7547');    // 近景深草綠
+        skyCtx.fillStyle = skyGradient;
+        skyCtx.fillRect(0, 0, 2, 512);
+        const skyTexture = new THREE.CanvasTexture(skyCanvas);
+        const skyGeo = new THREE.SphereGeometry(40, 32, 16);
+        const skyMat = new THREE.MeshBasicMaterial({ map: skyTexture, side: THREE.BackSide, fog: false });
+        const skyDome = new THREE.Mesh(skyGeo, skyMat);
+        skyDome.visible = false; // 預設隱藏
+        scene.add(skyDome);
+
+        // --- 5. 漂浮星塵特效 (Particles - 轉為低調的高級金粉) ---
+        const particlesGeo = new THREE.BufferGeometry();
+        const particlesCount = 300;
+        const posArr = new Float32Array(particlesCount * 3);
+        for(let i=0; i<particlesCount*3; i++) {
+            posArr[i] = (Math.random() - 0.5) * 12;
+            if(i%3 === 1) posArr[i] += 2; // Y軸往上移一點
+        }
+        particlesGeo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+        const particlesMat = new THREE.PointsMaterial({
+            size: 0.02,
+            color: 0xb08d57, // 青銅金
+            transparent: true,
+            opacity: 0.6,
+            blending: THREE.NormalBlending // 在亮背景下使用正常混色
+        });
+        const particleMesh = new THREE.Points(particlesGeo, particlesMat);
+        scene.add(particleMesh);
+
+        // --- 6. 軌跡控制器 ---
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.04;
+        controls.enablePan = false;
+        controls.minDistance = 2.5;
+        controls.maxDistance = 6;
+        controls.maxPolarAngle = Math.PI / 2 - 0.05; 
+        controls.target.set(0, 1.1, 0);
+
+        // --- 7. 雙層程序化陶瓷紋理 (Color Map + Bump Map) ---
+        function createTextures(type) {
+            const size = 1024;
+            const c = document.createElement('canvas'); // 顏色貼圖
+            c.width = size; c.height = size;
+            const ctx = c.getContext('2d');
+            
+            const b = document.createElement('canvas'); // 凹凸貼圖 (Bump Map)
+            b.width = size; b.height = size;
+            const btx = b.getContext('2d');
+
+            // 基礎背景色
+            ctx.fillStyle = '#ffffff'; 
+            ctx.fillRect(0, 0, size, size);
+            btx.fillStyle = '#808080'; // 灰色代表平坦
+            btx.fillRect(0, 0, size, size);
+
+            if (type === 'tang_sancai') {
+                // 唐三彩：流淌的釉色與立體流痕
+                for (let i = 0; i < 500; i++) {
+                    const x = Math.random() * size;
+                    const y = Math.random() * size;
+                    const width = Math.random() * 40 + 20;
+                    const height = Math.random() * 200 + 100;
+                    const colors = ['#8b9d77', '#d9a05b', '#8b5a2b', '#f5e6d3'];
+                    
+                    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                    ctx.globalAlpha = 0.7;
+                    ctx.beginPath();
+                    ctx.ellipse(x, y, width/2, height/2, 0, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // 流釉的邊緣會有微凸的厚度
+                    btx.fillStyle = '#a0a0a0'; 
+                    btx.globalAlpha = 0.5;
+                    btx.beginPath();
+                    btx.ellipse(x, y, width/2, height/2, 0, 0, Math.PI * 2);
+                    btx.fill();
+                }
+            } 
+            else if (type === 'song_ru') {
+                // 宋汝窯：天青色底與深深刻入的冰裂紋
+                ctx.fillStyle = '#88aabb';
+                ctx.fillRect(0, 0, size, size);
+                
+                ctx.strokeStyle = '#3a4a5a'; // 裂紋顏色
+                btx.strokeStyle = '#000000'; // 凹凸貼圖：純黑代表深刻的凹陷
+                
+                for(let i = 0; i < 800; i++) {
+                    const startX = Math.random() * size;
+                    const startY = Math.random() * size;
+                    const length = Math.random() * 50 + 20;
+                    const angle = Math.random() * Math.PI * 2;
+                    
+                    ctx.lineWidth = Math.random() > 0.8 ? 1.5 : 0.5;
+                    btx.lineWidth = ctx.lineWidth + 1; // 讓凹陷稍微寬一點點增強立體感
+                    
+                    ctx.globalAlpha = Math.random() * 0.5 + 0.3;
+                    btx.globalAlpha = 0.8;
+                    
+                    ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(startX + Math.cos(angle)*length, startY + Math.sin(angle)*length); ctx.stroke();
+                    btx.beginPath(); btx.moveTo(startX, startY); btx.lineTo(startX + Math.cos(angle)*length, startY + Math.sin(angle)*length); btx.stroke();
+                }
+            } 
+            else if (type === 'yuan_qinghua') {
+                // 元青花：蘇麻離青的鐵鏽斑凹陷
+                const paintColor = '#15325c';
+                for(let i = 0; i < 250; i++) {
+                    const x = Math.random() * size;
+                    const y = Math.random() * size;
+                    
+                    ctx.fillStyle = paintColor;
+                    ctx.globalAlpha = 0.9;
+                    ctx.beginPath();
+                    ctx.bezierCurveTo(x, y, x+40, y-80, x+120, y);
+                    ctx.lineWidth = Math.random() * 20 + 5;
+                    ctx.strokeStyle = paintColor;
+                    ctx.stroke();
+
+                    // 蘇麻離青特有的「吃胎」凹陷 (鐵鏽斑)
+                    if(Math.random() > 0.5) {
+                        btx.strokeStyle = '#404040'; // 較暗的灰色代表凹陷
+                        btx.lineWidth = ctx.lineWidth * 0.6;
+                        btx.beginPath();
+                        btx.bezierCurveTo(x, y, x+40, y-80, x+120, y);
+                        btx.stroke();
+                    }
+                }
+            } 
+            else if (type === 'ming_doucai' || type === 'qing_famille_rose') {
+                // 明鬥彩 / 清粉彩：釉上彩有明顯的厚度 (凸起)
+                const isFamilleRose = type === 'qing_famille_rose';
+                ctx.fillStyle = isFamilleRose ? '#111111' : '#fdfdfd'; // 萬花不露地底色偏暗
+                ctx.fillRect(0, 0, size, size);
+                
+                const colors = isFamilleRose 
+                    ? ['#e05686', '#83b46d', '#f4d03f', '#5dade2', '#af7ac5', '#f08080'] 
+                    : ['#c0392b', '#27ae60', '#f1c40f'];
+                
+                const flowerCount = isFamilleRose ? 1200 : 300;
+                
+                for(let i = 0; i < flowerCount; i++) {
+                    const x = Math.random() * size;
+                    const y = Math.random() * size;
+                    const radius = Math.random() * (isFamilleRose ? 25 : 15) + 5;
+                    
+                    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                    ctx.globalAlpha = 0.95;
+                    btx.fillStyle = '#ffffff'; // 純白代表凸起
+                    btx.globalAlpha = 0.8;
+
+                    ctx.beginPath(); btx.beginPath();
+                    for(let j = 0; j < 5; j++) {
+                        const px = x + Math.cos(j * Math.PI * 2 / 5) * radius;
+                        const py = y + Math.sin(j * Math.PI * 2 / 5) * radius;
+                        ctx.arc(px, py, radius*0.8, 0, Math.PI * 2);
+                        btx.arc(px, py, radius*0.8, 0, Math.PI * 2);
+                    }
+                    ctx.fill(); btx.fill();
+                    
+                    // 勾勒邊線 (鬥彩的青花邊線平坦，粉彩邊線也是凸起)
+                    if(!isFamilleRose) {
+                        ctx.strokeStyle = '#15325c'; // 青花輪廓
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            const colorMap = new THREE.CanvasTexture(c);
+            const bumpMap = new THREE.CanvasTexture(b);
+            colorMap.wrapS = colorMap.wrapT = THREE.RepeatWrapping;
+            bumpMap.wrapS = bumpMap.wrapT = THREE.RepeatWrapping;
+            
+            return { colorMap, bumpMap };
+        }
+
+        const textureCache = {
+            tang_sancai: createTextures('tang_sancai'),
+            song_ru: createTextures('song_ru'),
+            yuan_qinghua: createTextures('yuan_qinghua'),
+            ming_doucai: createTextures('ming_doucai'),
+            qing_famille_rose: createTextures('qing_famille_rose')
+        };
+
+        // --- 8. 生成 3D 陶瓷輪廓與材質 (結合 Bump Map) ---
+        let currentCeramicGroup = null;
+
+        // 陶瓷器形輪廓點 (y由底向上, x為半徑)
+        const silhouettes = {
+            meiping: [ new THREE.Vector2(0.3, 0), new THREE.Vector2(0.35, 0.2), new THREE.Vector2(0.55, 0.9), new THREE.Vector2(0.2, 1.3), new THREE.Vector2(0.15, 1.4), new THREE.Vector2(0.18, 1.45) ],
+            bowl: [ new THREE.Vector2(0.2, 0), new THREE.Vector2(0.22, 0.1), new THREE.Vector2(0.6, 0.4), new THREE.Vector2(0.8, 0.6) ],
+            gourd: [ new THREE.Vector2(0.3, 0), new THREE.Vector2(0.5, 0.3), new THREE.Vector2(0.2, 0.7), new THREE.Vector2(0.4, 1.0), new THREE.Vector2(0.1, 1.3), new THREE.Vector2(0.12, 1.4) ],
+            jar: [ new THREE.Vector2(0.35, 0), new THREE.Vector2(0.65, 0.4), new THREE.Vector2(0.55, 0.9), new THREE.Vector2(0.3, 1.1) ],
+            zun: [ new THREE.Vector2(0.3, 0), new THREE.Vector2(0.25, 0.2), new THREE.Vector2(0.45, 0.6), new THREE.Vector2(0.25, 1.0), new THREE.Vector2(0.35, 1.3) ]
+        };
+
+        function createCeramicModel(data) {
+            if (currentCeramicGroup) {
+                currentCeramicGroup.children.forEach(c => { c.geometry.dispose(); c.material.dispose(); });
+                scene.remove(currentCeramicGroup);
+            }
+
+            currentCeramicGroup = new THREE.Group();
+            const spline = new THREE.SplineCurve(silhouettes[data.shape]);
+            const baseGeometry = new THREE.LatheGeometry(spline.getPoints(80), 256); // 增加面數讓光澤更細膩
+            baseGeometry.computeVertexNormals();
+
+            // 陶瓷物理材質 (加入 bumpMap 呈現立體紋理)
+            let matParams = { 
+                color: data.color, 
+                side: THREE.DoubleSide, 
+                roughness: 0.05,        
+                metalness: 0.0,         
+                clearcoat: 1.0,         
+                clearcoatRoughness: 0.08 // 更為光亮
+            };
+            
+            if (data.texture && textureCache[data.texture]) {
+                matParams.map = textureCache[data.texture].colorMap;
+                matParams.bumpMap = textureCache[data.texture].bumpMap;
+                matParams.bumpScale = 0.015; // 凹凸立體強度
+            }
+
+            const ceramicMat = new THREE.MeshPhysicalMaterial(matParams);
+            const ceramicMesh = new THREE.Mesh(baseGeometry, ceramicMat);
+            ceramicMesh.castShadow = true; 
+            ceramicMesh.receiveShadow = true;
+            
+            ceramicMat.transparent = true;
+            ceramicMat.opacity = 0;
+            ceramicMesh.userData.targetOpacity = 1;
+
+            currentCeramicGroup.add(ceramicMesh);
+            
+            // 調整模型整體大小與位置以適應展台
+            currentCeramicGroup.scale.set(0.8, 0.8, 0.8);
+            if (data.shape === 'bowl') {
+                currentCeramicGroup.scale.set(1.2, 1.2, 1.2); // 碗體放大
+                currentCeramicGroup.position.y = 0.1;
+            }
+            
+            scene.add(currentCeramicGroup);
+        }
+
+        // --- 9. UI 互動與狀態更新 ---
+        window.switchCategory = function(category) {
+            window.currentCategory = category;
+            window.currentIndex = 0; // 每個朝代只有一件，固定為 0
+
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.className = 'category-btn px-6 py-2 rounded-full text-sm tracking-widest transition-all duration-300 hover:bg-black/5 text-gray-500 hover:text-gray-800';
+            });
+            const activeBtn = document.getElementById(`btn-${category}`);
+            activeBtn.className = 'category-btn px-6 py-2 rounded-full text-sm tracking-widest transition-all duration-300 bg-gold text-white font-medium shadow-md';
+
+            const catTextMap = { tang: 'TANG DYNASTY', song: 'SONG DYNASTY', yuan: 'YUAN DYNASTY', ming: 'MING DYNASTY', qing: 'QING DYNASTY' };
+            document.getElementById('ui-category-text').innerText = catTextMap[category];
+
+            updateUIAndModel();
+        };
+
+        // --- 新增：室內/室外場景切換邏輯 ---
+        window.isOutdoor = false;
+        window.toggleEnvironment = function() {
+            window.isOutdoor = !window.isOutdoor;
+            const btn = document.getElementById('btn-env-toggle');
+
+            if (window.isOutdoor) {
+                btn.innerHTML = '<span>✧</span> 場景：室外';
+                // 1. 環境切換為室外
+                skyDome.visible = true;
+                floor.material.color.setHex(0x5a7d51); // 換成清新的戶外草地綠
+                
+                // 2. 調整燈光為戶外陽光模式
+                ambientLight.intensity = 1.6; // 增強天光，讓暗部更透氣
+                keyLight.intensity = 0.4; // 降低室內主聚光燈
+                fillLight.intensity = 1.2; // 天空補光
+                rimLight.intensity = 0.6; // 降低背光
+                sunLight.intensity = 2.8; // 開啟強烈陽光直射
+                
+                // 3. 調整霧氣與背景色
+                scene.fog.color.setHex(0xb0d4d6); // 配合地平線的蔚藍霧氣
+                document.body.style.backgroundColor = '#b0d4d6';
+            } else {
+                btn.innerHTML = '<span>✧</span> 場景：室內';
+                // 1. 環境切換回室內博物館
+                skyDome.visible = false;
+                floor.material.color.setHex(0xdfd9cf); // 恢復博物館地面色
+                
+                // 2. 恢復博物館精緻打光
+                ambientLight.intensity = 0.8;
+                keyLight.intensity = 1.2;
+                fillLight.intensity = 0.8;
+                rimLight.intensity = 2.0;
+                sunLight.intensity = 0; // 關閉陽光
+                
+                // 3. 恢復霧氣與背景色
+                scene.fog.color.setHex(0xf4efe6); // 室內霧氣顏色
+                document.body.style.backgroundColor = '#f4efe6';
+            }
+        };
+
+        function updateUIAndModel() {
+            const data = window.ceramicData[window.currentCategory][window.currentIndex];
+            createCeramicModel(data);
+
+            const infoCard = document.getElementById('ui-name').parentElement;
+            infoCard.style.opacity = 0;
+            
+            setTimeout(() => {
+                document.getElementById('ui-name').innerText = data.name;
+                document.getElementById('ui-desc').innerText = data.desc;
+                document.getElementById('ui-origin').innerText = data.origin;
+                
+                const scheduleEl = document.getElementById('ui-schedule');
+                scheduleEl.innerText = data.schedule;
+                scheduleEl.className = 'text-sm px-4 py-1.5 rounded-full border tracking-wide ';
+                if(data.status === 'available') scheduleEl.classList.add('bg-green-50', 'text-green-700', 'border-green-200');
+                else if(data.status === 'warning') scheduleEl.classList.add('bg-yellow-50', 'text-yellow-700', 'border-yellow-200');
+                else scheduleEl.classList.add('bg-red-50', 'text-red-700', 'border-red-200');
+                
+                infoCard.style.opacity = 1;
+            }, 300);
+        }
+
+        updateUIAndModel();
+
+        // --- 10. 動畫迴圈 ---
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            const time = clock.getElapsedTime();
+            
+            // 星塵粒子緩慢旋轉與漂浮
+            particleMesh.rotation.y = time * 0.02;
+            particleMesh.position.y = Math.sin(time * 0.5) * 0.2;
+
+            // 動態閃爍光源 (完美展現陶瓷釉面反光的游移感)
+            sparkleLight.position.x = Math.sin(time * 0.8) * 3.5;
+            sparkleLight.position.z = Math.cos(time * 0.8) * 3.5;
+            sparkleLight.position.y = 1.0 + Math.sin(time * 1.5) * 1.0;
+
+            if(currentCeramicGroup) {
+                currentCeramicGroup.rotation.y += 0.002; // 陶瓷緩慢自轉
+                if (currentCeramicGroup.scale.x < 1 && currentCeramicGroup.scale.x > 0.8) {
+                    currentCeramicGroup.scale.addScalar(0.005);
+                }
+                
+                // 材質淡入
+                currentCeramicGroup.children.forEach(child => {
+                    if (child.material.opacity < child.userData.targetOpacity) {
+                        child.material.opacity += 0.04;
+                    }
+                });
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>
